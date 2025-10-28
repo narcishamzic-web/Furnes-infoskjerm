@@ -26,7 +26,7 @@ import {
   Upload,
 } from "lucide-react";
 
-// ---------- Hjelpefunksjoner ----------
+/* ---------------- Utils ---------------- */
 function formatTime(date, showSeconds) {
   return new Intl.DateTimeFormat("nb-NO", {
     hour: "2-digit",
@@ -43,7 +43,7 @@ function formatDate(date) {
   }).format(date);
 }
 
-// ---------- Vær ----------
+/* ---------------- Weather ---------------- */
 function weatherIcon(code) {
   if (code == null) return <Cloud className="h-7 w-7" />;
   if ([0, 1].includes(code)) return <Sun className="h-7 w-7" />;
@@ -67,7 +67,7 @@ async function fetchWeather(lat, lon) {
   };
 }
 
-// ---------- Nyheter (NRK RSS) ----------
+/* ---------------- News (NRK RSS) ---------------- */
 async function fetchRssTitles(rssUrl, proxyBase) {
   try {
     const proxied = `${proxyBase}${encodeURIComponent(rssUrl)}`;
@@ -83,7 +83,7 @@ async function fetchRssTitles(rssUrl, proxyBase) {
   return ["NRK: Siste nyheter – (feil ved henting)"];
 }
 
-// ---------- Komponenter ----------
+/* ---------------- Components ---------------- */
 function Logo({ url, name }) {
   if (url) return <img src={url} alt={`${name} logo`} className="h-12 w-auto object-contain drop-shadow-sm" />;
   const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 3).toUpperCase();
@@ -209,12 +209,19 @@ function FullscreenButtons() {
   );
 }
 
+/* ---------------- Settings Dialog ---------------- */
 function SettingsDialog({ cfg, setCfg }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(cfg);
-  const apply = () => { localStorage.setItem("skole-infoskjerm-config-v3", JSON.stringify(draft)); setCfg(draft); setOpen(false); };
+
+  const apply = () => {
+    localStorage.setItem("skole-infoskjerm-config-v3", JSON.stringify(draft));
+    setCfg(draft);
+    setOpen(false);
+  };
   useEffect(() => setDraft(cfg), [cfg]);
   const update = (patch) => setDraft({ ...draft, ...patch });
+
   const onLogoFile = (file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -235,7 +242,7 @@ function SettingsDialog({ cfg, setCfg }) {
           <DialogHeader><DialogTitle>Innstillinger</DialogTitle></DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Skoleinfo */}
+            {/* Skole & sted */}
             <div className="space-y-4">
               <h3 className="font-medium">Skole & sted</h3>
               <Input value={draft.schoolName} onChange={(e) => update({ schoolName: e.target.value })} placeholder="Skolenavn" />
@@ -258,91 +265,94 @@ function SettingsDialog({ cfg, setCfg }) {
                 <Upload className="h-4 w-4" /> Last opp logo-fil
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => onLogoFile(e.target.files?.[0])} />
               </label>
-              <div className="text-xs opacity-70">Opplasting lagres lokalt slik at logoen alltid vises på denne enheten.</div>
+              <div className="text-xs opacity-70">Logo lagres lokalt (data-URL) slik at den alltid vises på denne enheten.</div>
             </div>
 
             {/* Nyheter */}
             <div className="space-y-4">
               <h3 className="font-medium flex items-center gap-2"><Newspaper className="h-4 w-4" /> Nyheter (NRK – «Siste»)</h3>
               <Input value={draft.newsRssUrl} onChange={(e) => update({ newsRssUrl: e.target.value })} placeholder="https://www.nrk.no/nyheter/siste.rss" />
-              <Input value={draft.newsProxyUrl} onChange={(e) => update({ newsProxyUrl: e.target.value })} placeholder="https://api.allorigins.win/raw?url=" />
+              <Input value={draft.newsProxyUrl} onChange={(e) => update({ newsProxyUrl: e.target.value })} placeholder="/.netlify/functions/rss?url=" />
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm">Oppdater hvert (ms)</label>
-                <Input type="number" value={draft.newsRefreshMs} onChange={(e) => update({ newsRefreshMs: parseInt(e.target.value || \"0\", 10) })} />
+                <Input type="number" value={draft.newsRefreshMs} onChange={(e) => update({ newsRefreshMs: parseInt(e.target.value || "0", 10) })} />
               </div>
             </div>
 
             {/* Bildekarusell */}
             <div className="space-y-4 md:col-span-2">
               <h3 className="font-medium flex items-center gap-2"><Images className="h-4 w-4" /> Bildekarusell</h3>
+
+              {/* URL-er: én per linje */}
               <Textarea
                 rows={4}
-                value={draft.carouselImages.join(\"\\n\")}
-                onChange={(e) => update({ carouselImages: e.target.value.split(/\\n+/).map((s) => s.trim()).filter(Boolean) })}
-                placeholder=\"Lim inn bildeadresser (én per linje)\"
+                value={(draft.carouselImages || []).join("\n")}
+                onChange={(e) => update({ carouselImages: e.target.value.split(/\n+/).map((s) => s.trim()).filter(Boolean) })}
+                placeholder="Lim inn bildeadresser (én per linje – valgfritt)"
               />
 
               {/* Ny: opplasting av bilder */}
-              <div className=\"flex items-center gap-3\">
-                <label className=\"text-sm\">Last opp bilder (flere om gangen)</label>
+              <div className="flex items-center gap-3">
+                <label className="text-sm">Last opp bilder (flere om gangen)</label>
                 <input
-                  type=\"file\"
-                  accept=\"image/*\"
+                  type="file"
+                  accept="image/*"
                   multiple
                   onChange={async (e) => {
                     const files = Array.from(e.target.files || []);
                     if (!files.length) return;
-                    const toDataUrl = (file) => new Promise((res) => {
-                      const r = new FileReader();
-                      r.onload = () => res(String(r.result || \"\"));
-                      r.readAsDataURL(file);
-                    });
+                    const toDataUrl = (file) =>
+                      new Promise((res) => {
+                        const r = new FileReader();
+                        r.onload = () => res(String(r.result || ""));
+                        r.readAsDataURL(file);
+                      });
                     const dataUrls = await Promise.all(files.map(toDataUrl));
                     const next = [...(draft.carouselUploads || []), ...dataUrls];
                     update({ carouselUploads: next });
                   }}
                 />
               </div>
-              <div className=\"text-xs opacity-70\">Opplastede bilder lagres lokalt (samme enhet).</div>
+              <div className="text-xs opacity-70">Opplastede bilder lagres lokalt (data-URL), akkurat som logoen.</div>
               {(draft.carouselUploads?.length || 0) > 0 && (
-                <div className=\"text-sm mt-2 flex items-center gap-2\">
+                <div className="text-sm mt-2 flex items-center gap-2">
                   <span>{draft.carouselUploads.length} opplastet(e) bilde(r)</span>
-                  <Button variant=\"outline\" onClick={() => update({ carouselUploads: [] })} className=\"px-2 py-1 text-xs\">
+                  <Button variant="outline" onClick={() => update({ carouselUploads: [] })} className="px-2 py-1 text-xs">
                     Tøm opplastede
                   </Button>
                 </div>
               )}
 
-              <div className=\"grid grid-cols-2 md:grid-cols-4 gap-3 mt-2\">
-                <div className=\"col-span-2\">
-                  <label className=\"text-sm\">Bytt bilde hvert (ms)</label>
-                  <Input type=\"number\" value={draft.rotateEveryMs} onChange={(e) => update({ rotateEveryMs: parseInt(e.target.value || \"0\", 10) })} />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
+                <div className="col-span-2">
+                  <label className="text-sm">Bytt bilde hvert (ms)</label>
+                  <Input type="number" value={draft.rotateEveryMs} onChange={(e) => update({ rotateEveryMs: parseInt(e.target.value || "0", 10) })} />
                 </div>
                 <div>
-                  <label className=\"text-sm\">Vær: oppdater (ms)</label>
-                  <Input type=\"number\" value={draft.weatherRefreshMs} onChange={(e) => update({ weatherRefreshMs: parseInt(e.target.value || \"0\", 10) })} />
+                  <label className="text-sm">Vær: oppdater (ms)</label>
+                  <Input type="number" value={draft.weatherRefreshMs} onChange={(e) => update({ weatherRefreshMs: parseInt(e.target.value || "0", 10) })} />
                 </div>
                 <div>
-                  <label className=\"text-sm\">Nyheter: hastighet (sek)</label>
-                  <Input type=\"number\" value={draft.newsTickerSpeedSec} onChange={(e) => update({ newsTickerSpeedSec: parseInt(e.target.value || \"0\", 10) })} />
+                  <label className="text-sm">Ticker-hastighet (sek)</label>
+                  <Input type="number" value={draft.tickerSpeed} onChange={(e) => update({ tickerSpeed: parseInt(e.target.value || "0", 10) })} />
                 </div>
               </div>
             </div>
 
-            {/* Fravær / Hendelser */}
-            <div className=\"space-y-4\">
-              <h3 className=\"font-medium flex items-center gap-2\"><Users className=\"h-4 w-4\" /> Fravær</h3>
-              <Textarea rows={5} value={draft.absences.join(\"\\n\")} onChange={(e) => update({ absences: e.target.value.split(/\\n+/).map((s) => s.trim()).filter(Boolean) })} />
+            {/* Kunngjøringer / Fravær */}
+            <div className="space-y-4">
+              <h3 className="font-medium flex items-center gap-2"><Megaphone className="h-4 w-4" /> Kunngjøringer</h3>
+              <Textarea rows={8} value={draft.announcements} onChange={(e) => update({ announcements: e.target.value })} placeholder="Én rad per beskjed" />
             </div>
-            <div className=\"space-y-4\">
-              <h3 className=\"font-medium flex items-center gap-2\"><Megaphone className=\"h-4 w-4\" /> Hendelser / Kunngjøringer</h3>
-              <Textarea rows={5} value={draft.announcements.join(\"\\n\")} onChange={(e) => update({ announcements: e.target.value.split(/\\n+/).map((s) => s.trim()).filter(Boolean) })} />
+            <div className="space-y-4">
+              <h3 className="font-medium flex items-center gap-2"><Users className="h-4 w-4" /> Fravær</h3>
+              <Textarea rows={8} value={draft.absences} onChange={(e) => update({ absences: e.target.value })} placeholder="Én rad per person/klasse" />
             </div>
           </div>
 
-          <Separator className=\"my-4\" />
-          <div className=\"flex justify-end gap-3\">
-            <Button variant=\"secondary\" onClick={() => setOpen(false)}>Avbryt</Button>
+          <Separator className="my-4" />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Avbryt</Button>
             <Button onClick={apply}>Lagre</Button>
           </div>
         </DialogContent>
@@ -351,30 +361,31 @@ function SettingsDialog({ cfg, setCfg }) {
   );
 }
 
-// ---------- Hovedkomponent ----------
+/* ---------------- Main ---------------- */
 const DEFAULT_CONFIG = {
-  schoolName: \"Furnes ungdomsskole\",
-  locationName: \"Furnes, Ringsaker\",
-  latitude: 60.852,
-  longitude: 10.882,
-  showSeconds: true,
-  logoUrl: \"\",
-  newsRssUrl: \"https://www.nrk.no/nyheter/siste.rss\",
-  newsProxyUrl: \"/.netlify/functions/rss?url=\",
-  newsRefreshMs: 120000,
-  newsTickerSpeedSec: 50,
-  carouselImages: [],
-  carouselUploads: [],
+  schoolName: "Furnes ungdomsskole",
+  locationName: "Furnes, Ringsaker",
+  latitude: 60.843,
+  longitude: 10.866,
+  showSeconds: false,
+  logoUrl: "",
+  newsRssUrl: "https://www.nrk.no/nyheter/siste.rss",
+  newsProxyUrl: "/.netlify/functions/rss?url=",
+  newsRefreshMs: 300000,
+  tickerSpeed: 45,
+  carouselImages: [],      // URL-er (valgfritt)
+  carouselUploads: [],     // Opplastede bilder (data:URL)
   rotateEveryMs: 7000,
-  weatherRefreshMs: 180000,
-  absences: [],
-  announcements: [],
+  weatherRefreshMs: 600000,
+  announcements: "Velkommen til FUSK!\nForeldremøte torsdag kl. 18:00 i aulaen.\nSkolebiblioteket holder åpent hver dag storefri.",
+  absences: "Lærer: Kari Nordmann (8B)\nAssistent: Per Hansen (2A)",
 };
 
 export default function SkoleInfoskjerm() {
   const [cfg, setCfg] = useState(() => {
     try {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(\"skole-infoskjerm-config-v3\") || \"{}\") };
+      const raw = localStorage.getItem("skole-infoskjerm-config-v3");
+      return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG;
     } catch {
       return DEFAULT_CONFIG;
     }
@@ -385,19 +396,21 @@ export default function SkoleInfoskjerm() {
   const [validImages, setValidImages] = useState([]);
   const [failedImages, setFailedImages] = useState(0);
 
-  // Vær
+  // Weather
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const w = await fetchWeather(cfg.latitude, cfg.longitude);
-      if (!cancelled) setWeather(w);
+      try {
+        const w = await fetchWeather(cfg.latitude, cfg.longitude);
+        if (!cancelled) setWeather(w);
+      } catch {}
     };
     load();
     const t = setInterval(load, Math.max(60000, cfg.weatherRefreshMs));
     return () => { cancelled = true; clearInterval(t); };
   }, [cfg.latitude, cfg.longitude, cfg.weatherRefreshMs]);
 
-  // Nyheter
+  // News
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -409,12 +422,12 @@ export default function SkoleInfoskjerm() {
     return () => { cancelled = true; clearInterval(t); };
   }, [cfg.newsRssUrl, cfg.newsRefreshMs, cfg.newsProxyUrl]);
 
-  // Kombiner og forhåndslast bilder
+  // Combine uploads + URLs and preload/filter
   useEffect(() => {
     let cancelled = false;
     const probe = (url) =>
       new Promise((resolve) => {
-        if (url.startsWith(\"data:\")) return resolve(true);
+        if ((url || "").startsWith("data:")) return resolve(true);
         const img = new Image();
         const done = (ok) => resolve(ok);
         img.onload = () => done(true);
@@ -426,7 +439,7 @@ export default function SkoleInfoskjerm() {
       const uploads = (cfg.carouselUploads || []).map((s) => s.trim()).filter(Boolean);
       const urls = (cfg.carouselImages || []).map((s) => s.trim()).filter(Boolean);
       const all = [...uploads, ...urls];
-      if (!all.length) { setValidImages([]); setFailedImages(0); return; }
+      if (!all.length) { if (!cancelled) { setValidImages([]); setFailedImages(0); } return; }
       const results = await Promise.all(all.map(probe));
       const ok = all.filter((_, i) => results[i]);
       if (!cancelled) { setValidImages(ok); setFailedImages(all.length - ok.length); }
@@ -434,20 +447,30 @@ export default function SkoleInfoskjerm() {
     return () => { cancelled = true; };
   }, [cfg.carouselUploads, cfg.carouselImages]);
 
-  const announcementLines = cfg.announcements || [];
-  const absenceLines = cfg.absences || [];
+  const announcementLines = useMemo(() => (cfg.announcements || "").split(/\n+/).map(s=>s.trim()).filter(Boolean), [cfg.announcements]);
+  const absenceLines      = useMemo(() => (cfg.absences || "").split(/\n+/).map(s=>s.trim()).filter(Boolean), [cfg.absences]);
 
   return (
-    <div className=\"min-h-screen w-full bg-gradient-to-b from-blue-100 via-white to-blue-50 text-slate-800 flex flex-col gap-3 p-4 select-none\">
-      <HeaderBar cfg={cfg} weather={weather} />
-      <ImageCarousel images={validImages} failedCount={failedImages} intervalMs={cfg.rotateEveryMs} />
-      <div className=\"grid grid-cols-1 md:grid-cols-2 gap-3\">
-        <TextList title=\"Kunngjøringer\" icon={<Megaphone className=\"h-5 w-5\" />} lines={announcementLines} />
-        <TextList title=\"Fravær\" icon={<Users className=\"h-5 w-5\" />} lines={absenceLines} />
+    <div className="min-h-screen w-full bg-gradient-to-b from-sky-100 via-teal-100 to-emerald-100 text-slate-900 select-none">
+      <div className="max-w-[1920px] mx-auto p-4 pb-24">
+        <HeaderBar cfg={cfg} weather={weather} />
+
+        <div className="grid grid-cols-12 gap-4">
+          <div className="col-span-12 xl:col-span-8">
+            <ImageCarousel images={validImages} failedCount={failedImages} intervalMs={cfg.rotateEveryMs} />
+          </div>
+          <div className="col-span-12 xl:col-span-4 flex flex-col gap-4">
+            <TextList title="Kunngjøringer" icon={<Megaphone className="h-5 w-5" />} lines={announcementLines} />
+            <TextList title="Fravær i dag" icon={<Users className="h-5 w-5" />} lines={absenceLines} />
+          </div>
+          <div className="col-span-12">
+            <NewsTicker items={news} speedSec={cfg.tickerSpeed} />
+          </div>
+        </div>
       </div>
-      <NewsTicker items={news} speedSec={cfg.newsTickerSpeedSec} />
-      <SettingsDialog cfg={cfg} setCfg={setCfg} />
+
       <FullscreenButtons />
+      <SettingsDialog cfg={cfg} setCfg={setCfg} />
     </div>
   );
 }
