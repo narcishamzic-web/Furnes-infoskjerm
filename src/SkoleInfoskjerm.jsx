@@ -217,9 +217,13 @@ function SettingsDialog({ cfg, setCfg }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="fixed bottom-4 left-4 z-50 shadow">
-          <Settings className="mr-2 h-4 w-4" /> Innstillinger
-        </Button>
+<Button
+  variant="outline"
+  className="fixed bottom-4 left-4 z-50 shadow"
+  onClick={() => setOpen(true)}
+>
+  <Settings className="mr-2 h-4 w-4" /> Innstillinger
+</Button>       
       </DialogTrigger>
       {open && (
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
