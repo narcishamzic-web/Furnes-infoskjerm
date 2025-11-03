@@ -8,25 +8,17 @@ import { Textarea } from "./components/ui/textarea";
 import { Switch } from "./components/ui/switch";
 import { Separator } from "./components/ui/separator";
 import {
-  Cloud,
-  Sun,
-  CloudRain,
-  CloudSnow,
-  CloudDrizzle,
-  CloudLightning,
-  CloudFog,
-  MapPin,
-  Images,
-  Newspaper,
-  Megaphone,
-  Users,
-  Settings,
-  Maximize2,
-  RefreshCw,
-  Upload,
+  Cloud, Sun, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog,
+  MapPin, Images, Newspaper, Megaphone, Users, Settings, Maximize2, RefreshCw, Upload,
 } from "lucide-react";
 
-/* ---------------- Utils ---------------- */
+/* ---------- Firebase ---------- */
+import { auth, db } from "./firebase";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+const FIRESTORE_DOC = doc(db, "configs", "default");
+
+/* ---------- Utils ---------- */
 function formatTime(date, showSeconds) {
   return new Intl.DateTimeFormat("nb-NO", {
     hour: "2-digit",
@@ -43,7 +35,7 @@ function formatDate(date) {
   }).format(date);
 }
 
-/* ---------------- Weather ---------------- */
+/* ---------- Weather ---------- */
 function weatherIcon(code) {
   if (code == null) return <Cloud className="h-7 w-7" />;
   if ([0, 1].includes(code)) return <Sun className="h-7 w-7" />;
@@ -67,7 +59,7 @@ async function fetchWeather(lat, lon) {
   };
 }
 
-/* ---------------- News (NRK RSS) ---------------- */
+/* ---------- News (NRK RSS) ---------- */
 async function fetchRssTitles(rssUrl, proxyBase) {
   try {
     const proxied = `${proxyBase}${encodeURIComponent(rssUrl)}`;
@@ -83,7 +75,7 @@ async function fetchRssTitles(rssUrl, proxyBase) {
   return ["NRK: Siste nyheter – (feil ved henting)"];
 }
 
-/* ---------------- Components ---------------- */
+/* ---------- Components ---------- */
 function Logo({ url, name }) {
   if (url) return <img src={url} alt={`${name} logo`} className="h-12 w-auto object-contain drop-shadow-sm" />;
   const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 3).toUpperCase();
@@ -92,19 +84,14 @@ function Logo({ url, name }) {
 
 function HeaderBar({ cfg, weather }) {
   const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   return (
     <div className="w-full grid grid-cols-3 items-center gap-4 p-4">
       <div className="flex items-center gap-3">
         <Logo url={cfg.logoUrl} name={cfg.schoolName} />
         <div>
           <h1 className="text-2xl font-semibold leading-none tracking-tight">{cfg.schoolName}</h1>
-          <div className="text-xs opacity-80 flex items-center gap-1">
-            <MapPin className="h-3.5 w-3.5" /> {cfg.locationName}
-          </div>
+          <div className="text-xs opacity-80 flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {cfg.locationName}</div>
         </div>
       </div>
       <div className="text-center">
@@ -133,7 +120,6 @@ function ImageCarousel({ images, intervalMs, failedCount = 0 }) {
     const t = setInterval(() => setIndex((i) => (i + 1) % images.length), intervalMs);
     return () => clearInterval(t);
   }, [images, intervalMs]);
-
   const current = images[index];
   return (
     <div className="relative h-[62vh] w-full overflow-hidden rounded-2xl shadow-sm">
@@ -209,16 +195,16 @@ function FullscreenButtons() {
   );
 }
 
-/* ---------------- Settings Dialog ---------------- */
-function SettingsDialog({ cfg, setCfg }) {
+/* ---------- Settings Dialog ---------- */
+function SettingsDialog({ cfg, setCfg, user, onSaveCloud, onLoadCloud }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(cfg);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
 
-  const apply = () => {
-    localStorage.setItem("skole-infoskjerm-config-v3", JSON.stringify(draft));
-    setCfg(draft);
-    setOpen(false);
-  };
+  const apply = () => { localStorage.setItem("skole-infoskjerm-config-v3", JSON.stringify(draft)); setCfg(draft); setOpen(false); };
   useEffect(() => setDraft(cfg), [cfg]);
   const update = (patch) => setDraft({ ...draft, ...patch });
 
@@ -265,7 +251,7 @@ function SettingsDialog({ cfg, setCfg }) {
                 <Upload className="h-4 w-4" /> Last opp logo-fil
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => onLogoFile(e.target.files?.[0])} />
               </label>
-              <div className="text-xs opacity-70">Logo lagres lokalt (data-URL) slik at den alltid vises på denne enheten.</div>
+              <div className="text-xs opacity-70">Logo lagres lokalt på denne enheten.</div>
             </div>
 
             {/* Nyheter */}
@@ -291,29 +277,26 @@ function SettingsDialog({ cfg, setCfg }) {
                 placeholder="Lim inn bildeadresser (én per linje – valgfritt)"
               />
 
-              {/* Ny: opplasting av bilder */}
+              {/* Opplasting av bilder (lagres lokalt som data-URL) */}
               <div className="flex items-center gap-3">
                 <label className="text-sm">Last opp bilder (flere om gangen)</label>
                 <input
-                  type="file"
-                  accept="image/*"
-                  multiple
+                  type="file" accept="image/*" multiple
                   onChange={async (e) => {
                     const files = Array.from(e.target.files || []);
                     if (!files.length) return;
-                    const toDataUrl = (file) =>
-                      new Promise((res) => {
-                        const r = new FileReader();
-                        r.onload = () => res(String(r.result || ""));
-                        r.readAsDataURL(file);
-                      });
+                    const toDataUrl = (file) => new Promise((res) => {
+                      const r = new FileReader();
+                      r.onload = () => res(String(r.result || ""));
+                      r.readAsDataURL(file);
+                    });
                     const dataUrls = await Promise.all(files.map(toDataUrl));
                     const next = [...(draft.carouselUploads || []), ...dataUrls];
                     update({ carouselUploads: next });
                   }}
                 />
               </div>
-              <div className="text-xs opacity-70">Opplastede bilder lagres lokalt (data-URL), akkurat som logoen.</div>
+              <div className="text-xs opacity-70">Opplastede bilder lagres lokalt (samme enhet).</div>
               {(draft.carouselUploads?.length || 0) > 0 && (
                 <div className="text-sm mt-2 flex items-center gap-2">
                   <span>{draft.carouselUploads.length} opplastet(e) bilde(r)</span>
@@ -350,6 +333,79 @@ function SettingsDialog({ cfg, setCfg }) {
             </div>
           </div>
 
+          {/* Sky & admin */}
+          <Separator className="my-4" />
+          <div className="space-y-2">
+            <h3 className="font-medium">Sky & admin</h3>
+
+            {!user ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <Input placeholder="Admin e-post" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input placeholder="Passord" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Button
+                  onClick={async () => {
+                    setBusy(true); setStatus("Logger inn …");
+                    try {
+                      await signInWithEmailAndPassword(auth, email.trim(), password);
+                      setStatus("✅ Innlogget");
+                    } catch (e) {
+                      setStatus("❌ " + (e?.message || "Feil ved innlogging"));
+                    } finally { setBusy(false); }
+                  }}
+                  disabled={busy || !email || !password}
+                >
+                  Logg inn
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="text-sm">Innlogget som <b>{user.email}</b></div>
+                <Button variant="outline" onClick={async () => { await signOut(auth); setStatus("Logget ut"); }}>Logg ut</Button>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                disabled={busy || !user}
+                onClick={async () => {
+                  setBusy(true); setStatus("Lagrer til sky …");
+                  try {
+                    await onSaveCloud(draft);
+                    setStatus("✅ Lagret til sky");
+                  } catch (e) {
+                    setStatus("❌ " + (e?.message || "Feil ved lagring"));
+                  } finally { setBusy(false); }
+                }}
+              >
+                Lagre til sky
+              </Button>
+
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true); setStatus("Henter fra sky …");
+                  try {
+                    const cloud = await onLoadCloud();
+                    const merged = { ...draft, ...cloud };
+                    setDraft(merged); // lagres ikke lokalt før du trykker "Lagre"
+                    setStatus("✅ Hentet fra sky (ikke lagret lokalt ennå)");
+                  } catch (e) {
+                    setStatus("❌ " + (e?.message || "Feil ved henting)");
+                  } finally { setBusy(false); }
+                }}
+              >
+                Hent fra sky
+              </Button>
+            </div>
+
+            {!!status && <div className="text-sm opacity-80">{status}</div>}
+            <div className="text-xs opacity-70">
+              «Lagre» nedenfor lagrer lokalt på denne enheten. «Lagre til sky» krever innlogging og gjør at alle enheter får samme innhold.
+            </div>
+          </div>
+
           <Separator className="my-4" />
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Avbryt</Button>
@@ -361,7 +417,7 @@ function SettingsDialog({ cfg, setCfg }) {
   );
 }
 
-/* ---------------- Main ---------------- */
+/* ---------- Hoved ---------- */
 const DEFAULT_CONFIG = {
   schoolName: "Furnes ungdomsskole",
   locationName: "Furnes, Ringsaker",
@@ -373,8 +429,8 @@ const DEFAULT_CONFIG = {
   newsProxyUrl: "/.netlify/functions/rss?url=",
   newsRefreshMs: 300000,
   tickerSpeed: 45,
-  carouselImages: [],      // URL-er (valgfritt)
-  carouselUploads: [],     // Opplastede bilder (data:URL)
+  carouselImages: [],   // URL-er (valgfritt)
+  carouselUploads: [],  // Opplastede bilder (data:URL)
   rotateEveryMs: 7000,
   weatherRefreshMs: 600000,
   announcements: "Velkommen til FUSK!\nForeldremøte torsdag kl. 18:00 i aulaen.\nSkolebiblioteket holder åpent hver dag storefri.",
@@ -386,15 +442,38 @@ export default function SkoleInfoskjerm() {
     try {
       const raw = localStorage.getItem("skole-infoskjerm-config-v3");
       return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG;
-    } catch {
-      return DEFAULT_CONFIG;
-    }
+    } catch { return DEFAULT_CONFIG; }
   });
 
   const [weather, setWeather] = useState(null);
   const [news, setNews] = useState([]);
   const [validImages, setValidImages] = useState([]);
   const [failedImages, setFailedImages] = useState(0);
+  const [user, setUser] = useState(null);
+
+  // Firebase auth state
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    return () => unsub();
+  }, []);
+
+  // Last konfig fra Firestore ved oppstart (overstyrer lokal hvis finnes)
+  useEffect(() => {
+    (async () => {
+      try {
+        const snap = await getDoc(FIRESTORE_DOC);
+        if (snap.exists()) {
+          const serverCfg = snap.data();
+          const merged = { ...cfg, ...serverCfg };
+          localStorage.setItem("skole-infoskjerm-config-v3", JSON.stringify(merged));
+          setCfg(merged);
+        }
+      } catch (e) {
+        console.warn("Kunne ikke hente Firestore-konfig", e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Weather
   useEffect(() => {
@@ -422,19 +501,18 @@ export default function SkoleInfoskjerm() {
     return () => { cancelled = true; clearInterval(t); };
   }, [cfg.newsRssUrl, cfg.newsRefreshMs, cfg.newsProxyUrl]);
 
-  // Combine uploads + URLs and preload/filter
+  // Kombiner uploads + URLs og preload/filter
   useEffect(() => {
     let cancelled = false;
-    const probe = (url) =>
-      new Promise((resolve) => {
-        if ((url || "").startsWith("data:")) return resolve(true);
-        const img = new Image();
-        const done = (ok) => resolve(ok);
-        img.onload = () => done(true);
-        img.onerror = () => done(false);
-        img.src = url;
-        setTimeout(() => done(false), 7000);
-      });
+    const probe = (url) => new Promise((resolve) => {
+      if ((url || "").startsWith("data:")) return resolve(true);
+      const img = new Image();
+      const done = (ok) => resolve(ok);
+      img.onload = () => done(true);
+      img.onerror = () => done(false);
+      img.src = url;
+      setTimeout(() => done(false), 7000);
+    });
     (async () => {
       const uploads = (cfg.carouselUploads || []).map((s) => s.trim()).filter(Boolean);
       const urls = (cfg.carouselImages || []).map((s) => s.trim()).filter(Boolean);
@@ -449,6 +527,15 @@ export default function SkoleInfoskjerm() {
 
   const announcementLines = useMemo(() => (cfg.announcements || "").split(/\n+/).map(s=>s.trim()).filter(Boolean), [cfg.announcements]);
   const absenceLines      = useMemo(() => (cfg.absences || "").split(/\n+/).map(s=>s.trim()).filter(Boolean), [cfg.absences]);
+
+  async function saveToCloud(config) {
+    // Krever at bruker er innlogget (sjekkes i Firestore Rules)
+    await setDoc(FIRESTORE_DOC, config, { merge: true });
+  }
+  async function loadFromCloud() {
+    const snap = await getDoc(FIRESTORE_DOC);
+    return snap.exists() ? snap.data() : {};
+  }
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-sky-100 via-teal-100 to-emerald-100 text-slate-900 select-none">
@@ -470,7 +557,13 @@ export default function SkoleInfoskjerm() {
       </div>
 
       <FullscreenButtons />
-      <SettingsDialog cfg={cfg} setCfg={setCfg} />
+      <SettingsDialog
+        cfg={cfg}
+        setCfg={setCfg}
+        user={user}
+        onSaveCloud={saveToCloud}
+        onLoadCloud={loadFromCloud}
+      />
     </div>
   );
 }
