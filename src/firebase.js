@@ -2,7 +2,6 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// ✅ Dine egne verdier fra Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCSXDa85SOJDQmMOZDyxzL2brJdzOsbG4E",
   authDomain: "infoskjerm-82c04.firebaseapp.com",
@@ -13,9 +12,6 @@ const firebaseConfig = {
   measurementId: "G-X6ZTJ2KFWF"
 };
 
-// 🔹 Initialiser Firebase
 const app = initializeApp(firebaseConfig);
-
-// 🔹 Eksporter Auth og Firestore slik at nettsiden kan bruke dem
 export const auth = getAuth(app);
 export const db = getFirestore(app);
