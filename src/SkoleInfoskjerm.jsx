@@ -392,7 +392,7 @@ function SettingsDialog({ cfg, setCfg, user, onSaveCloud, onLoadCloud }) {
                     setDraft(merged); // lagres ikke lokalt før du trykker "Lagre"
                     setStatus("✅ Hentet fra sky (ikke lagret lokalt ennå)");
                   } catch (e) {
-                    setStatus("❌ " + (e?.message || "Feil ved henting)");
+                    setStatus("❌ " + (e?.message || "Feil ved henting"));
                   } finally { setBusy(false); }
                 }}
               >
