@@ -400,7 +400,6 @@ function SettingsDialog({ cfg, setCfg, user, onSaveCloud, onLoadCloud }) {
             <div className="text-xs opacity-70">
               «Lagre» nedenfor lagrer lokalt på denne enheten. «Lagre til sky» krever innlogging og gjør at alle enheter får samme innhold.
             </div>
-          </div>
 
           <Separator className="my-4" />
           <div className="flex justify-end gap-2">
