@@ -14,9 +14,23 @@ import {
 
 /* ---------- Firebase ---------- */
 import { auth, db } from "./firebase";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-const FIRESTORE_DOC = doc(db, "configs", "default");
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+
+// Sky-lagring uten innlogging
+async function saveToCloud(data) {
+  const ref = doc(db, "configs", "default");
+  await setDoc(ref, {
+    ...data,
+    _updatedAt: serverTimestamp(),
+  });
+}
+
+async function loadFromCloud() {
+  const ref = doc(db, "configs", "default");
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Ingen sky-data funnet ennå.");
+  return snap.data();
+}
 
 /* ---------- Utils ---------- */
 function formatTime(date, showSeconds) {
