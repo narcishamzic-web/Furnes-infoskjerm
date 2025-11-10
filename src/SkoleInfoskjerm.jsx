@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 /* ---------- Firebase ---------- */
-import { auth, db } from "./firebase";
+import { db } from "./firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 // Sky-lagring uten innlogging
