@@ -396,9 +396,6 @@ function SettingsDialog({ cfg, setCfg, user, onSaveCloud, onLoadCloud }) {
   </p>
 </div>
 
-         
-            </div>
-
             {!!status && <div className="text-sm opacity-80">{status}</div>}
             <div className="text-xs opacity-70">
               «Lagre» nedenfor lagrer lokalt på denne enheten. «Lagre til sky» krever innlogging og gjør at alle enheter får samme innhold.
