@@ -346,72 +346,57 @@ function SettingsDialog({ cfg, setCfg, user, onSaveCloud, onLoadCloud }) {
               <Textarea rows={8} value={draft.absences} onChange={(e) => update({ absences: e.target.value })} placeholder="Én rad per person/klasse" />
             </div>
           </div>
+          
+{/* Sky – uten innlogging */}
+<div className="mt-6">
+  <div className="font-medium mb-2">Sky</div>
+  <div className="flex gap-2">
+    <button
+      type="button"
+      className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
+      disabled={busy}
+      onClick={async () => {
+        try {
+          setBusy(true);
+          await saveToCloud(draft);
+          setStatus("✅ Lagret til sky");
+        } catch (e) {
+          setStatus("❌ " + (e?.message || "Feil ved lagring"));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      Lagre til sky
+    </button>
 
-          {/* Sky & admin */}
-          <Separator className="my-4" />
-          <div className="space-y-2">
-            <h3 className="font-medium">Sky & admin</h3>
+    <button
+      type="button"
+      className="px-3 py-2 rounded border disabled:opacity-60"
+      disabled={busy}
+      onClick={async () => {
+        try {
+          setBusy(true);
+          const cloud = await loadFromCloud();
+          setDraft({ ...draft, ...cloud });
+          setStatus("✅ Hentet fra sky (ikke lagret lokalt ennå)");
+        } catch (e) {
+          setStatus("❌ " + (e?.message || "Feil ved henting"));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      Hent fra sky
+    </button>
+  </div>
+  <p className="text-xs text-muted-foreground mt-2">
+    «Lagre» nedenfor lagrer lokalt på denne enheten. «Lagre til sky» deler
+    innholdet med alle enheter som åpner infoskjermen.
+  </p>
+</div>
 
-            {!user ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <Input placeholder="Admin e-post" value={email} onChange={(e) => setEmail(e.target.value)} />
-                <Input placeholder="Passord" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-                <Button
-                  onClick={async () => {
-                    setBusy(true); setStatus("Logger inn …");
-                    try {
-                      await signInWithEmailAndPassword(auth, email.trim(), password);
-                      setStatus("✅ Innlogget");
-                    } catch (e) {
-                      setStatus("❌ " + (e?.message || "Feil ved innlogging"));
-                    } finally { setBusy(false); }
-                  }}
-                  disabled={busy || !email || !password}
-                >
-                  Logg inn
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <div className="text-sm">Innlogget som <b>{user.email}</b></div>
-                <Button variant="outline" onClick={async () => { await signOut(auth); setStatus("Logget ut"); }}>Logg ut</Button>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                disabled={busy || !user}
-                onClick={async () => {
-                  setBusy(true); setStatus("Lagrer til sky …");
-                  try {
-                    await onSaveCloud(draft);
-                    setStatus("✅ Lagret til sky");
-                  } catch (e) {
-                    setStatus("❌ " + (e?.message || "Feil ved lagring"));
-                  } finally { setBusy(false); }
-                }}
-              >
-                Lagre til sky
-              </Button>
-
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true); setStatus("Henter fra sky …");
-                  try {
-                    const cloud = await onLoadCloud();
-                    const merged = { ...draft, ...cloud };
-                    setDraft(merged); // lagres ikke lokalt før du trykker "Lagre"
-                    setStatus("✅ Hentet fra sky (ikke lagret lokalt ennå)");
-                  } catch (e) {
-                    setStatus("❌ " + (e?.message || "Feil ved henting"));
-                  } finally { setBusy(false); }
-                }}
-              >
-                Hent fra sky
-              </Button>
+         
             </div>
 
             {!!status && <div className="text-sm opacity-80">{status}</div>}
