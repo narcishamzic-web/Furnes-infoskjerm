@@ -426,7 +426,7 @@ const DEFAULT_CONFIG = {
   showSeconds: false,
   logoUrl: "",
   newsRssUrl: "https://www.nrk.no/nyheter/siste.rss",
-  newsProxyUrl: "/.netlify/functions/rss?url=",
+  newsProxyUrl: "https://api.allorigins.win/raw?url=",
   newsRefreshMs: 300000,
   tickerSpeed: 45,
   carouselImages: [],   // URL-er (valgfritt)
