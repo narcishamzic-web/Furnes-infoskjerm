@@ -72,22 +72,33 @@ async function fetchWeather(lat, lon) {
     weathercode: typeof cw.weathercode === "number" ? cw.weathercode : null,
   };
 }
+// NRK "Siste" RSS (kan også bruke toppsaker.rss)
+const NRK_RSS = "https://www.nrk.no/nyheter/siste.rss";
 
-/* ---------- News (NRK RSS) ---------- */
-async function fetchRssTitles(rssUrl, proxyBase) {
-  try {
-    const proxied = `${proxyBase}${encodeURIComponent(rssUrl)}`;
-    const res = await fetch(proxied);
-    const text = await res.text();
-    const xml = new window.DOMParser().parseFromString(text, "application/xml");
-    const items = Array.from(xml.querySelectorAll("item > title"));
-    const titles = items.map((n) => n.textContent?.trim()).filter(Boolean);
-    if (titles.length) return titles;
-  } catch (e) {
-    console.warn("RSS fetch failed", e);
-  }
-  return ["NRK: Siste nyheter – (feil ved henting)"];
+// Liten proxy for å omgå CORS i nettleser
+function proxied(url: string) {
+  return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
 }
+
+async function fetchNrkNews(limit = 20) {
+  // Hent RSS via proxy
+  const res = await fetch(proxied(NRK_RSS), { cache: "no-store" });
+  if (!res.ok) throw new Error("Kunne ikke hente NRK RSS (" + res.status + ")");
+
+  const xml = await res.text();
+  const doc = new window.DOMParser().parseFromString(xml, "text/xml");
+
+  // Plukk ut <item>-ene
+  const items = Array.from(doc.querySelectorAll("item")).slice(0, limit);
+  return items.map((it) => ({
+    title: (it.querySelector("title")?.textContent || "").trim(),
+    link: (it.querySelector("link")?.textContent || "").trim(),
+    pubDate: it.querySelector("pubDate")?.textContent || "",
+  }))
+  // rens tomme titler
+  .filter(n => n.title);
+}
+
 
 /* ---------- Components ---------- */
 function Logo({ url, name }) {
