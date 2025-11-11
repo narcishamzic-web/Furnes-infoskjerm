@@ -494,15 +494,26 @@ export default function SkoleInfoskjerm() {
 
   // News
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const items = await fetchRssTitles(cfg.newsRssUrl, cfg.newsProxyUrl);
-      if (!cancelled) setNews(items);
-    };
-    load();
-    const t = setInterval(load, Math.max(60000, cfg.newsRefreshMs));
-    return () => { cancelled = true; clearInterval(t); };
-  }, [cfg.newsRssUrl, cfg.newsRefreshMs, cfg.newsProxyUrl]);
+  let alive = true;
+
+  async function loadNews() {
+    try {
+      const news = await fetchNrkNews(30);
+      if (!alive) return;
+      setNews(news);      // <- din state
+      setNewsError("");   // hvis du har feilmeldingsfelt
+    } catch (e) {
+      if (!alive) return;
+      setNews([]);
+      setNewsError("feil ved henting");
+    }
+  }
+
+  loadNews();
+  const t = setInterval(loadNews, 10 * 60 * 1000); // oppdater hver 10. min
+  return () => { alive = false; clearInterval(t); };
+}, []);
+
 
   // Kombiner uploads + URLs og preload/filter
   useEffect(() => {
