@@ -72,11 +72,11 @@ async function fetchWeather(lat, lon) {
     weathercode: typeof cw.weathercode === "number" ? cw.weathercode : null,
   };
 }
-// NRK "Siste" RSS (kan også bruke toppsaker.rss)
+// NRK "Siste" RSS
 const NRK_RSS = "https://www.nrk.no/nyheter/siste.rss";
 
 // Liten proxy for å omgå CORS i nettleser
-function proxied(url: string) {
+function proxied(url) {
   return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
 }
 
@@ -90,13 +90,13 @@ async function fetchNrkNews(limit = 20) {
 
   // Plukk ut <item>-ene
   const items = Array.from(doc.querySelectorAll("item")).slice(0, limit);
-  return items.map((it) => ({
-    title: (it.querySelector("title")?.textContent || "").trim(),
-    link: (it.querySelector("link")?.textContent || "").trim(),
-    pubDate: it.querySelector("pubDate")?.textContent || "",
-  }))
-  // rens tomme titler
-  .filter(n => n.title);
+  return items
+    .map((it) => ({
+      title: (it.querySelector("title")?.textContent || "").trim(),
+      link: (it.querySelector("link")?.textContent || "").trim(),
+      pubDate: it.querySelector("pubDate")?.textContent || "",
+    }))
+    .filter((n) => n.title);
 }
 
 
