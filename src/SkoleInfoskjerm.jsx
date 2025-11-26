@@ -329,7 +329,7 @@ export default function SkoleInfoskjerm() {
               animate={{ x: ["100%", "-100%"] }}
               transition={{
                 repeat: Infinity,
-                duration: 140, // <-- endre tallet her om du vil ha raskere/saktere
+                duration: 110, // <-- endre tallet her om du vil ha raskere/saktere
                 ease: "linear",
               }}
             >
