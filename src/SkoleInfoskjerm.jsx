@@ -20,6 +20,8 @@ import {
   Newspaper,
   Users,
   Settings,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 
 import { db } from "./firebase";
@@ -130,6 +132,9 @@ export default function SkoleInfoskjerm() {
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [hideCursor, setHideCursor] = useState(false);
+
   // -------- Klokke --------
   useEffect(() => {
     function updateTime() {
@@ -209,6 +214,54 @@ export default function SkoleInfoskjerm() {
     };
   }, [config.newsEnabled]);
 
+  // -------- Fullskjerm-håndtering --------
+  useEffect(() => {
+    function onFullscreenChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, []);
+
+  function enterFullscreen() {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => {});
+    }
+  }
+
+  function exitFullscreen() {
+    if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }
+
+  // -------- Auto-gjem musepeker etter 10s --------
+  useEffect(() => {
+    let timeoutId;
+
+    function resetHideCursor() {
+      setHideCursor(false);
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setHideCursor(true);
+      }, 10000); // 10 sekunder
+    }
+
+    resetHideCursor();
+
+    window.addEventListener("mousemove", resetHideCursor);
+    window.addEventListener("touchstart", resetHideCursor);
+
+    return () => {
+      window.removeEventListener("mousemove", resetHideCursor);
+      window.removeEventListener("touchstart", resetHideCursor);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, []);
+
   // -------- Lagre lokalt --------
   function handleSaveLocal() {
     setConfig(draft);
@@ -221,7 +274,10 @@ export default function SkoleInfoskjerm() {
   // --------------------------------------------------
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-sky-50 to-emerald-50 text-slate-900 flex flex-col">
+    <div
+      className="relative min-h-screen bg-gradient-to-b from-sky-50 to-emerald-50 text-slate-900 flex flex-col"
+      style={{ cursor: hideCursor ? "none" : "default" }}
+    >
       {/* HEADER */}
       <header className="px-6 py-4 flex items-center justify-between bg-sky-50/60 backdrop-blur border-b border-sky-100">
         <div>
@@ -243,17 +299,23 @@ export default function SkoleInfoskjerm() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm">
-            <Cloud className="w-5 h-5" />
-            <div>
-              <div className="font-medium">Vær</div>
-              <div className="text-xs text-slate-600">
-                Oppdater manuelt i tekst for nå
-              </div>
-            </div>
-          </div>
+        <div className="flex items-center gap-2">
+          {/* Fullskjerm-knapp */}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              isFullscreen ? exitFullscreen() : enterFullscreen();
+            }}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="w-4 h-4" />
+            ) : (
+              <Maximize2 className="w-4 h-4" />
+            )}
+          </Button>
 
+          {/* Innstillinger-knapp */}
           <Button
             variant="outline"
             size="icon"
@@ -319,7 +381,7 @@ export default function SkoleInfoskjerm() {
         </div>
       </main>
 
-      {/* NRK-TICKER – NÅ MED SAKTERE HASTIGHET */}
+      {/* NRK-TICKER – med roligere hastighet */}
       {config.newsEnabled && tickerText && (
         <div className="h-10 bg-blue-600 text-white flex items-center overflow-hidden px-4">
           <Newspaper className="w-4 h-4 mr-2 flex-shrink-0" />
@@ -329,7 +391,7 @@ export default function SkoleInfoskjerm() {
               animate={{ x: ["100%", "-100%"] }}
               transition={{
                 repeat: Infinity,
-                duration: 110, // <-- endre tallet her om du vil ha raskere/saktere
+                duration: 110, // juster her om du vil endre tempo videre
                 ease: "linear",
               }}
             >
