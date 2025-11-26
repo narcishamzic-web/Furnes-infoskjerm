@@ -30,7 +30,12 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
+// --------------------------------------------------
+// KONSTANTER / HJELPEFUNKSJONER
+// --------------------------------------------------
+
 const LOCAL_KEY = "infoskjerm_config_v1";
+
 const NRK_RSS_URL =
   "https://api.allorigins.win/raw?url=https://www.nrk.no/nyheter/siste.rss";
 
@@ -69,18 +74,21 @@ async function saveToCloud(data) {
 async function loadFromCloud() {
   const ref = doc(db, "configs", "default");
   const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error("Ingen sky-data funnet.");
+  if (!snap.exists()) {
+    throw new Error("Ingen sky-data funnet ennå.");
+  }
   return snap.data();
 }
 
 async function fetchNRKNewsTitles() {
   const res = await fetch(NRK_RSS_URL, { cache: "no-store" });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-
+  if (!res.ok) {
+    throw new Error("HTTP " + res.status);
+  }
   const xml = await res.text();
-  const docXml = new DOMParser().parseFromString(xml, "text/xml");
+  const xmlDoc = new DOMParser().parseFromString(xml, "text/xml");
 
-  return Array.from(docXml.querySelectorAll("item > title"))
+  return Array.from(xmlDoc.querySelectorAll("item > title"))
     .map((t) => (t.textContent || "").trim())
     .filter(Boolean)
     .slice(0, 30);
@@ -101,9 +109,14 @@ const DEFAULT_CONFIG = {
   newsEnabled: true,
 };
 
+// --------------------------------------------------
+// HOVEDKOMPONENT
+// --------------------------------------------------
+
 export default function SkoleInfoskjerm() {
   const [config, setConfig] = useState(loadLocalConfig() || DEFAULT_CONFIG);
   const [draft, setDraft] = useState(config);
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -111,12 +124,14 @@ export default function SkoleInfoskjerm() {
   const [timeString, setTimeString] = useState("");
   const [dateString, setDateString] = useState("");
 
-  const [tickerText, setTickerText] = useState("NRK: Laster siste nyheter…");
+  const [tickerText, setTickerText] = useState(
+    "NRK: Laster siste nyheter…"
+  );
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  // -------- Klokke --------
   useEffect(() => {
-    const now = new Date();
     function updateTime() {
       const now = new Date();
       setTimeString(
@@ -139,6 +154,7 @@ export default function SkoleInfoskjerm() {
     return () => clearInterval(t);
   }, []);
 
+  // -------- Bildekarusell --------
   const imageUrls = (config.imageUrlsText || "")
     .split("\n")
     .map((s) => s.trim())
@@ -152,6 +168,7 @@ export default function SkoleInfoskjerm() {
     return () => clearInterval(t);
   }, [imageUrls.length, config.carouselIntervalMs]);
 
+  // -------- Hent lokal lagring ved mount --------
   useEffect(() => {
     const stored = loadLocalConfig();
     if (stored) {
@@ -160,8 +177,10 @@ export default function SkoleInfoskjerm() {
     }
   }, []);
 
+  // -------- Hent NRK-nyheter --------
   useEffect(() => {
     let alive = true;
+
     async function loadNews() {
       try {
         if (!config.newsEnabled) {
@@ -181,6 +200,7 @@ export default function SkoleInfoskjerm() {
         setTickerText("NRK: Feil ved henting av nyheter");
       }
     }
+
     loadNews();
     const t = setInterval(loadNews, 10 * 60 * 1000);
     return () => {
@@ -189,15 +209,19 @@ export default function SkoleInfoskjerm() {
     };
   }, [config.newsEnabled]);
 
+  // -------- Lagre lokalt --------
   function handleSaveLocal() {
     setConfig(draft);
     saveLocalConfig(draft);
-    setStatus("✅ Lagret lokalt");
+    setStatus("✅ Lagret lokalt på denne enheten");
   }
+
+  // --------------------------------------------------
+  // RENDER
+  // --------------------------------------------------
 
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-sky-50 to-emerald-50 text-slate-900 flex flex-col">
-
       {/* HEADER */}
       <header className="px-6 py-4 flex items-center justify-between bg-sky-50/60 backdrop-blur border-b border-sky-100">
         <div>
@@ -219,28 +243,41 @@ export default function SkoleInfoskjerm() {
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => {
-            setDraft(config);
-            setSettingsOpen(true);
-            setStatus("");
-          }}
-        >
-          <Settings className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Cloud className="w-5 h-5" />
+            <div>
+              <div className="font-medium">Vær</div>
+              <div className="text-xs text-slate-600">
+                Oppdater manuelt i tekst for nå
+              </div>
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              setDraft(config);
+              setStatus("");
+              setSettingsOpen(true);
+            }}
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
+        </div>
       </header>
 
       {/* MAIN */}
       <main className="flex-1 px-6 py-4 flex gap-4 overflow-hidden">
-
+        {/* VENSTRE: BILDER */}
         <Card className="flex-1 overflow-hidden">
           <CardContent className="p-0 h-full">
             {imageUrls.length ? (
               <motion.img
                 key={imageUrls[currentImageIndex]}
                 src={imageUrls[currentImageIndex]}
+                alt=""
                 className="w-full h-full object-cover"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -248,12 +285,13 @@ export default function SkoleInfoskjerm() {
               />
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400">
-                Ingen bilder
+                Ingen bilder – legg til i innstillinger.
               </div>
             )}
           </CardContent>
         </Card>
 
+        {/* HØYRE: KUNNGJØRINGER + FRAVÆR */}
         <div className="w-[380px] flex flex-col gap-4">
           <Card className="flex-1">
             <CardHeader className="pb-2">
@@ -281,24 +319,30 @@ export default function SkoleInfoskjerm() {
         </div>
       </main>
 
-      {/* TICKER */}
+      {/* NRK-TICKER – NÅ MED SAKTERE HASTIGHET */}
       {config.newsEnabled && tickerText && (
         <div className="h-10 bg-blue-600 text-white flex items-center overflow-hidden px-4">
-          <motion.div
-            className="whitespace-nowrap"
-            animate={{ x: ["100%", "-100%"] }}
-            transition={{ repeat: Infinity, duration: 60, ease: "linear" }}
-          >
-            {tickerText}
-          </motion.div>
+          <Newspaper className="w-4 h-4 mr-2 flex-shrink-0" />
+          <div className="relative w-full overflow-hidden">
+            <motion.div
+              className="whitespace-nowrap"
+              animate={{ x: ["100%", "-100%"] }}
+              transition={{
+                repeat: Infinity,
+                duration: 140, // <-- endre tallet her om du vil ha raskere/saktere
+                ease: "linear",
+              }}
+            >
+              {tickerText}
+            </motion.div>
+          </div>
         </div>
       )}
 
-      {/* SETTINGS MODAL */}
+      {/* INNSTILLINGER-MODAL */}
       {settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto p-6">
-
+          <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Innstillinger</h2>
               <Button variant="ghost" onClick={() => setSettingsOpen(false)}>
@@ -307,10 +351,10 @@ export default function SkoleInfoskjerm() {
             </div>
 
             <div className="space-y-6">
-
+              {/* Skoleinfo */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label>Skolens navn</label>
+                  <label className="text-sm font-medium">Skolens navn</label>
                   <Input
                     value={draft.schoolName}
                     onChange={(e) =>
@@ -319,7 +363,7 @@ export default function SkoleInfoskjerm() {
                   />
                 </div>
                 <div>
-                  <label>Sted</label>
+                  <label className="text-sm font-medium">Sted</label>
                   <Input
                     value={draft.location}
                     onChange={(e) =>
@@ -331,44 +375,55 @@ export default function SkoleInfoskjerm() {
 
               <Separator />
 
-              <div>
-                <label className="font-medium flex items-center gap-2">
+              {/* Bildekarusell */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
                   <Images className="w-4 h-4" />
-                  Bilder (1 URL per linje)
-                </label>
+                  <div className="font-medium">Bildekarusell</div>
+                </div>
+                <p className="text-xs text-slate-600">
+                  Lim inn én bildeadresse (URL) per linje.
+                </p>
                 <Textarea
-                  rows={4}
+                  rows={5}
                   value={draft.imageUrlsText}
                   onChange={(e) =>
                     setDraft({ ...draft, imageUrlsText: e.target.value })
                   }
                 />
-                <div className="flex items-center gap-2 mt-2 text-sm">
+                <div className="flex items-center gap-2 text-sm">
                   <span>Bytt bilde hvert</span>
                   <Input
                     type="number"
-                    value={draft.carouselIntervalMs}
                     className="w-24"
+                    value={draft.carouselIntervalMs}
                     onChange={(e) =>
                       setDraft({
                         ...draft,
-                        carouselIntervalMs: Number(e.target.value),
+                        carouselIntervalMs: Number(e.target.value) || 7000,
                       })
                     }
                   />
-                  <span>ms</span>
+                  <span>ms (1000 ms = 1 sekund)</span>
                 </div>
               </div>
 
               <Separator />
 
-              <div>
-                <label>Kunngjøringer</label>
+              {/* Kunngjøringer */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Newspaper className="w-4 h-4" />
+                  <div className="font-medium">Kunngjøringer</div>
+                </div>
                 <Input
                   className="mb-1"
                   value={draft.announcementTitle}
                   onChange={(e) =>
-                    setDraft({ ...draft, announcementTitle: e.target.value })
+                    setDraft({
+                      ...draft,
+                      announcementTitle: e.target.value,
+                    })
                   }
                 />
                 <Textarea
@@ -382,13 +437,20 @@ export default function SkoleInfoskjerm() {
 
               <Separator />
 
-              <div>
-                <label>Fravær</label>
+              {/* Fravær */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  <div className="font-medium">Fravær i dag</div>
+                </div>
                 <Input
                   className="mb-1"
                   value={draft.absenceTitle}
                   onChange={(e) =>
-                    setDraft({ ...draft, absenceTitle: e.target.value })
+                    setDraft({
+                      ...draft,
+                      absenceTitle: e.target.value,
+                    })
                   }
                 />
                 <Textarea
@@ -402,18 +464,21 @@ export default function SkoleInfoskjerm() {
 
               <Separator />
 
-              <div>
-                <label className="font-medium">Sky</label>
-                <div className="flex gap-2 mt-2">
+              {/* Sky */}
+              <div className="space-y-2">
+                <div className="font-medium">Sky</div>
+                <div className="flex gap-2">
                   <Button
+                    type="button"
                     disabled={busy}
                     onClick={async () => {
                       try {
                         setBusy(true);
                         await saveToCloud(draft);
                         setStatus("✅ Lagret til sky");
-                      } catch {
-                        setStatus("❌ Feil ved lagring");
+                      } catch (e) {
+                        console.error(e);
+                        setStatus("❌ Feil ved lagring til sky");
                       } finally {
                         setBusy(false);
                       }
@@ -421,8 +486,8 @@ export default function SkoleInfoskjerm() {
                   >
                     Lagre til sky
                   </Button>
-
                   <Button
+                    type="button"
                     variant="outline"
                     disabled={busy}
                     onClick={async () => {
@@ -430,9 +495,12 @@ export default function SkoleInfoskjerm() {
                         setBusy(true);
                         const cloud = await loadFromCloud();
                         setDraft({ ...draft, ...cloud });
-                        setStatus("Hentet fra sky");
-                      } catch {
-                        setStatus("❌ Feil ved henting");
+                        setStatus(
+                          "✅ Hentet fra sky (ikke lagret lokalt ennå)"
+                        );
+                      } catch (e) {
+                        console.error(e);
+                        setStatus("❌ Feil ved henting fra sky");
                       } finally {
                         setBusy(false);
                       }
@@ -441,15 +509,18 @@ export default function SkoleInfoskjerm() {
                     Hent fra sky
                   </Button>
                 </div>
-
-                {status && <div className="mt-2 text-sm">{status}</div>}
+                {status && <div className="text-sm opacity-80">{status}</div>}
               </div>
 
               <Separator />
 
+              {/* NRK av/på */}
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-medium">NRK-nyheter</div>
+                  <div className="font-medium">NRK-nyheter nederst</div>
+                  <p className="text-xs text-slate-600">
+                    Viser siste nyheter fra NRK i rullende linje nederst.
+                  </p>
                 </div>
                 <Switch
                   checked={draft.newsEnabled}
@@ -461,8 +532,16 @@ export default function SkoleInfoskjerm() {
 
               <Separator />
 
+              {/* Lagre / avbryt */}
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setSettingsOpen(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDraft(config);
+                    setStatus("");
+                    setSettingsOpen(false);
+                  }}
+                >
                   Avbryt
                 </Button>
                 <Button
@@ -474,7 +553,6 @@ export default function SkoleInfoskjerm() {
                   Lagre lokalt
                 </Button>
               </div>
-
             </div>
           </div>
         </div>
