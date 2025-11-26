@@ -381,7 +381,7 @@ export default function SkoleInfoskjerm() {
         </div>
       </main>
 
-      {/* NRK-TICKER – med roligere hastighet */}
+      {/* NRK-TICKER */}
       {config.newsEnabled && tickerText && (
         <div className="h-10 bg-blue-600 text-white flex items-center overflow-hidden px-4">
           <Newspaper className="w-4 h-4 mr-2 flex-shrink-0" />
@@ -391,7 +391,7 @@ export default function SkoleInfoskjerm() {
               animate={{ x: ["100%", "-100%"] }}
               transition={{
                 repeat: Infinity,
-                duration: 110, // juster her om du vil endre tempo videre
+                duration: 110, // tempo på nyhetene
                 ease: "linear",
               }}
             >
@@ -530,6 +530,7 @@ export default function SkoleInfoskjerm() {
               <div className="space-y-2">
                 <div className="font-medium">Sky</div>
                 <div className="flex gap-2">
+                  {/* LAGRE TIL SKY + TA I BRUK MED EN GANG */}
                   <Button
                     type="button"
                     disabled={busy}
@@ -537,7 +538,9 @@ export default function SkoleInfoskjerm() {
                       try {
                         setBusy(true);
                         await saveToCloud(draft);
-                        setStatus("✅ Lagret til sky");
+                        setConfig(draft);
+                        saveLocalConfig(draft);
+                        setStatus("✅ Lagret til sky og tatt i bruk");
                       } catch (e) {
                         console.error(e);
                         setStatus("❌ Feil ved lagring til sky");
@@ -548,6 +551,8 @@ export default function SkoleInfoskjerm() {
                   >
                     Lagre til sky
                   </Button>
+
+                  {/* HENT FRA SKY + TA I BRUK */}
                   <Button
                     type="button"
                     variant="outline"
@@ -556,10 +561,11 @@ export default function SkoleInfoskjerm() {
                       try {
                         setBusy(true);
                         const cloud = await loadFromCloud();
-                        setDraft({ ...draft, ...cloud });
-                        setStatus(
-                          "✅ Hentet fra sky (ikke lagret lokalt ennå)"
-                        );
+                        const merged = { ...config, ...cloud };
+                        setDraft(merged);
+                        setConfig(merged);
+                        saveLocalConfig(merged);
+                        setStatus("✅ Hentet fra sky og tatt i bruk");
                       } catch (e) {
                         console.error(e);
                         setStatus("❌ Feil ved henting fra sky");
