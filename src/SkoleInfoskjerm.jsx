@@ -36,14 +36,33 @@ import {
 // KONSTANTER / HJELPEFUNKSJONER
 // --------------------------------------------------
 
-const LOCAL_KEY = "infoskjerm_config_v1";
+const LOCAL_KEY_PREFIX = "infoskjerm_config_v1";
 
 const NRK_RSS_URL =
   "https://api.allorigins.win/raw?url=https://www.nrk.no/nyheter/siste.rss";
 
-function loadLocalConfig() {
+function getInitialRole() {
+  if (typeof window === "undefined") return "elev";
+  const params = new URLSearchParams(window.location.search);
+  const r = params.get("role");
+  if (r === "laerer" || r === "lærer") return "laerer";
+  return "elev";
+}
+
+function getInitialMode() {
+  if (typeof window === "undefined") return "admin";
+  const params = new URLSearchParams(window.location.search);
+  const m = params.get("mode");
+  return m === "view" ? "view" : "admin";
+}
+
+function localKeyForRole(role) {
+  return `${LOCAL_KEY_PREFIX}_${role}`;
+}
+
+function loadLocalConfig(role) {
   try {
-    const raw = localStorage.getItem(LOCAL_KEY);
+    const raw = localStorage.getItem(localKeyForRole(role));
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (e) {
@@ -52,9 +71,9 @@ function loadLocalConfig() {
   }
 }
 
-function saveLocalConfig(cfg) {
+function saveLocalConfig(role, cfg) {
   try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(cfg));
+    localStorage.setItem(localKeyForRole(role), JSON.stringify(cfg));
   } catch (e) {
     console.error("Kunne ikke lagre til localStorage", e);
   }
@@ -64,20 +83,20 @@ function stripHeavyFields(data) {
   return { ...(data || {}) };
 }
 
-async function saveToCloud(data) {
+async function saveToCloud(role, data) {
   const safe = stripHeavyFields(data);
-  const ref = doc(db, "configs", "default");
+  const ref = doc(db, "configs", role); // docs: elev, laerer
   await setDoc(ref, {
     ...safe,
     _updatedAt: serverTimestamp(),
   });
 }
 
-async function loadFromCloud() {
-  const ref = doc(db, "configs", "default");
+async function loadFromCloud(role) {
+  const ref = doc(db, "configs", role);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
-    throw new Error("Ingen sky-data funnet ennå.");
+    throw new Error("Ingen sky-data funnet for rolle: " + role);
   }
   return snap.data();
 }
@@ -116,8 +135,12 @@ const DEFAULT_CONFIG = {
 // --------------------------------------------------
 
 export default function SkoleInfoskjerm() {
-  const [config, setConfig] = useState(loadLocalConfig() || DEFAULT_CONFIG);
-  const [draft, setDraft] = useState(config);
+  const [viewerRole] = useState(getInitialRole);   // hvilken rolle denne URL-en “viser” som standard
+  const [mode] = useState(getInitialMode);         // admin eller view
+  const [activeRole, setActiveRole] = useState(viewerRole); // hvilken rolle du redigerer / forhåndsviser
+
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [draft, setDraft] = useState(DEFAULT_CONFIG);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -159,6 +182,18 @@ export default function SkoleInfoskjerm() {
     return () => clearInterval(t);
   }, []);
 
+  // -------- Hent lokal config for viewerRole ved mount --------
+  useEffect(() => {
+    const stored = loadLocalConfig(viewerRole);
+    if (stored) {
+      setConfig(stored);
+      setDraft(stored);
+    } else {
+      setConfig(DEFAULT_CONFIG);
+      setDraft(DEFAULT_CONFIG);
+    }
+  }, [viewerRole]);
+
   // -------- Bildekarusell --------
   const imageUrls = (config.imageUrlsText || "")
     .split("\n")
@@ -172,15 +207,6 @@ export default function SkoleInfoskjerm() {
     }, config.carouselIntervalMs || 7000);
     return () => clearInterval(t);
   }, [imageUrls.length, config.carouselIntervalMs]);
-
-  // -------- Hent lokal lagring ved mount --------
-  useEffect(() => {
-    const stored = loadLocalConfig();
-    if (stored) {
-      setConfig(stored);
-      setDraft(stored);
-    }
-  }, []);
 
   // -------- Hent NRK-nyheter --------
   useEffect(() => {
@@ -262,16 +288,19 @@ export default function SkoleInfoskjerm() {
     };
   }, []);
 
-  // -------- Lagre lokalt --------
+  // -------- Lagre lokalt for aktiv rolle --------
   function handleSaveLocal() {
     setConfig(draft);
-    saveLocalConfig(draft);
-    setStatus("✅ Lagret lokalt på denne enheten");
+    saveLocalConfig(activeRole, draft);
+    setStatus("✅ Lagret lokalt for " + activeRole);
   }
 
   // --------------------------------------------------
   // RENDER
   // --------------------------------------------------
+
+  const isAdmin = mode === "admin";
+  const effectiveRole = activeRole; // det vi forhåndsviser (på view-skjerm = viewerRole)
 
   return (
     <div
@@ -287,6 +316,11 @@ export default function SkoleInfoskjerm() {
           <div className="flex items-center text-sm text-slate-600 gap-1">
             <MapPin className="w-4 h-4" />
             <span>{config.location}</span>
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">
+            Visning:{" "}
+            {effectiveRole === "laerer" ? "Lærerskjerm" : "Elevskjerm"}
+            {isAdmin && " (admin)"}
           </div>
         </div>
 
@@ -315,18 +349,20 @@ export default function SkoleInfoskjerm() {
             )}
           </Button>
 
-          {/* Innstillinger-knapp */}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              setDraft(config);
-              setStatus("");
-              setSettingsOpen(true);
-            }}
-          >
-            <Settings className="w-4 h-4" />
-          </Button>
+          {/* Innstillinger-knapp kun i admin-modus */}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                setDraft(config);
+                setStatus("");
+                setSettingsOpen(true);
+              }}
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </header>
 
@@ -353,7 +389,7 @@ export default function SkoleInfoskjerm() {
           </CardContent>
         </Card>
 
-        {/* HØYRE: KUNNGJØRINGER + FRAVÆR */}
+        {/* HØYRE: KUNNGJØRINGER + (ev.) FRAVÆR */}
         <div className="w-[380px] flex flex-col gap-4">
           <Card className="flex-1">
             <CardHeader className="pb-2">
@@ -367,17 +403,20 @@ export default function SkoleInfoskjerm() {
             </CardContent>
           </Card>
 
-          <Card className="flex-1">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Users className="w-4 h-4" />
-                {config.absenceTitle}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm whitespace-pre-line">
-              {config.absence}
-            </CardContent>
-          </Card>
+          {/* Fravær-kort kun på lærerskjerm */}
+          {effectiveRole === "laerer" && (
+            <Card className="flex-1">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Users className="w-4 h-4" />
+                  {config.absenceTitle}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm whitespace-pre-line">
+                {config.absence}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
 
@@ -401,8 +440,8 @@ export default function SkoleInfoskjerm() {
         </div>
       )}
 
-      {/* INNSTILLINGER-MODAL */}
-      {settingsOpen && (
+      {/* INNSTILLINGER-MODAL (kun admin) */}
+      {isAdmin && settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-4">
@@ -413,6 +452,58 @@ export default function SkoleInfoskjerm() {
             </div>
 
             <div className="space-y-6">
+              {/* Velg hvilken skjerm du redigerer */}
+              <div>
+                <label className="text-sm font-medium">
+                  Rediger skjerm
+                </label>
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    type="button"
+                    variant={activeRole === "elev" ? "default" : "outline"}
+                    onClick={() => {
+                      setActiveRole("elev");
+                      const stored = loadLocalConfig("elev");
+                      if (stored) {
+                        setConfig(stored);
+                        setDraft(stored);
+                        setStatus("Redigerer elevskjerm (lokal data)");
+                      } else {
+                        setConfig(DEFAULT_CONFIG);
+                        setDraft(DEFAULT_CONFIG);
+                        setStatus("Redigerer elevskjerm (standardinnhold)");
+                      }
+                    }}
+                  >
+                    Elevskjerm
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={activeRole === "laerer" ? "default" : "outline"}
+                    onClick={() => {
+                      setActiveRole("laerer");
+                      const stored = loadLocalConfig("laerer");
+                      if (stored) {
+                        setConfig(stored);
+                        setDraft(stored);
+                        setStatus("Redigerer lærerskjerm (lokal data)");
+                      } else {
+                        setConfig(DEFAULT_CONFIG);
+                        setDraft(DEFAULT_CONFIG);
+                        setStatus("Redigerer lærerskjerm (standardinnhold)");
+                      }
+                    }}
+                  >
+                    Lærerskjerm
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Dette styrer hvilken skjerm (elev/lærer) du redigerer og forhåndsviser nå.
+                </p>
+              </div>
+
+              <Separator />
+
               {/* Skoleinfo */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
@@ -499,11 +590,11 @@ export default function SkoleInfoskjerm() {
 
               <Separator />
 
-              {/* Fravær */}
+              {/* Fravær – har effekt bare på lærerskjermen */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  <div className="font-medium">Fravær i dag</div>
+                  <div className="font-medium">Fravær i dag (vises kun på lærerskjerm)</div>
                 </div>
                 <Input
                   className="mb-1"
@@ -528,7 +619,7 @@ export default function SkoleInfoskjerm() {
 
               {/* Sky */}
               <div className="space-y-2">
-                <div className="font-medium">Sky</div>
+                <div className="font-medium">Sky (rolle: {activeRole})</div>
                 <div className="flex gap-2">
                   {/* LAGRE TIL SKY + TA I BRUK MED EN GANG */}
                   <Button
@@ -537,10 +628,14 @@ export default function SkoleInfoskjerm() {
                     onClick={async () => {
                       try {
                         setBusy(true);
-                        await saveToCloud(draft);
+                        await saveToCloud(activeRole, draft);
                         setConfig(draft);
-                        saveLocalConfig(draft);
-                        setStatus("✅ Lagret til sky og tatt i bruk");
+                        saveLocalConfig(activeRole, draft);
+                        setStatus(
+                          "✅ Lagret til sky for " +
+                            activeRole +
+                            " og tatt i bruk"
+                        );
                       } catch (e) {
                         console.error(e);
                         setStatus("❌ Feil ved lagring til sky");
@@ -560,12 +655,16 @@ export default function SkoleInfoskjerm() {
                     onClick={async () => {
                       try {
                         setBusy(true);
-                        const cloud = await loadFromCloud();
-                        const merged = { ...config, ...cloud };
+                        const cloud = await loadFromCloud(activeRole);
+                        const merged = { ...DEFAULT_CONFIG, ...cloud };
                         setDraft(merged);
                         setConfig(merged);
-                        saveLocalConfig(merged);
-                        setStatus("✅ Hentet fra sky og tatt i bruk");
+                        saveLocalConfig(activeRole, merged);
+                        setStatus(
+                          "✅ Hentet fra sky for " +
+                            activeRole +
+                            " og tatt i bruk"
+                        );
                       } catch (e) {
                         console.error(e);
                         setStatus("❌ Feil ved henting fra sky");
