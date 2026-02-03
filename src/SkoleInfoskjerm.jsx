@@ -114,7 +114,28 @@ async function fetchNRKNewsTitles() {
     .filter(Boolean)
     .slice(0, 30);
 }
-
+// NYTT START: Hent værdata fra Yr/Met
+async function fetchWeather(location) {
+  try {
+    const res = await fetch(
+      "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=60.828&lon=10.841",
+      { headers: { "User-Agent": "infoskjerm/1.0" } }
+    );
+    if (!res.ok) throw new Error("Feil ved henting av vær");
+    const data = await res.json();
+    const now = new Date();
+    const instant = data.properties.timeseries.find(
+      ts => new Date(ts.time) >= now
+    );
+    const temp = instant?.data.instant.details.air_temperature;
+    const symbol = instant?.data.next_1_hours?.summary.symbol_code;
+    return { temp, symbol };
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+// NYTT SLUTT
 const DEFAULT_CONFIG = {
   schoolName: "Furnes ungdomsskole",
   location: "Furnes, Ringsaker",
@@ -128,6 +149,12 @@ const DEFAULT_CONFIG = {
     "• Lærer: Kari Nordmann (8B)\n• Assistent: Per Hansen (2A)",
   carouselIntervalMs: 7000,
   newsEnabled: true,
+  // NYTT START: Vær og quiz/gåte/vits
+weatherEnabled: true,
+weatherLocation: "Furnes, Ringsaker",
+quizTitle: "Quiz / Gåte / Vits",
+quizContent: "Hva heter Norges høyeste fjell? – Galdhøpiggen",
+// NYTT SLUTT
 };
 
 // --------------------------------------------------
@@ -157,6 +184,9 @@ export default function SkoleInfoskjerm() {
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hideCursor, setHideCursor] = useState(false);
+  // NYTT START: State for værdata
+const [weatherData, setWeatherData] = useState(null);
+// NYTT SLUTT
 
   // -------- Klokke --------
   useEffect(() => {
@@ -239,7 +269,25 @@ export default function SkoleInfoskjerm() {
       clearInterval(t);
     };
   }, [config.newsEnabled]);
-
+// NYTT START: Hent værdata hver 15. min
+useEffect(() => {
+  let alive = true;
+  async function loadWeather() {
+    try {
+      if (!config.weatherEnabled) return;
+      const data = await fetchWeather(config.weatherLocation);
+      if (!alive) return;
+      setWeatherData(data);
+    } catch (e) {
+      console.error("Feil ved henting av vær", e);
+      setWeatherData(null);
+    }
+  }
+  loadWeather();
+  const t = setInterval(loadWeather, 15 * 60 * 1000);
+  return () => { alive = false; clearInterval(t); };
+}, [config.weatherEnabled, config.weatherLocation]);
+// NYTT SLUTT
   // -------- Fullskjerm-håndtering --------
   useEffect(() => {
     function onFullscreenChange() {
@@ -366,59 +414,84 @@ export default function SkoleInfoskjerm() {
         </div>
       </header>
 
-      {/* MAIN */}
-      <main className="flex-1 px-6 py-4 flex gap-4 overflow-hidden">
-        {/* VENSTRE: BILDER */}
-        <Card className="flex-1 overflow-hidden">
-          <CardContent className="p-0 h-full">
-            {imageUrls.length ? (
-              <motion.img
-                key={imageUrls[currentImageIndex]}
-                src={imageUrls[currentImageIndex]}
-                alt=""
-                className="w-full h-full object-cover"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.6 }}
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center text-slate-400">
-                Ingen bilder – legg til i innstillinger.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* HØYRE: KUNNGJØRINGER + (ev.) FRAVÆR */}
-        <div className="w-[380px] flex flex-col gap-4">
-          <Card className="flex-1">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Newspaper className="w-4 h-4" />
-                {config.announcementTitle}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm whitespace-pre-line">
-              {config.announcements}
-            </CardContent>
-          </Card>
-
-          {/* Fravær-kort kun på lærerskjerm */}
-          {effectiveRole === "laerer" && (
-            <Card className="flex-1">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Users className="w-4 h-4" />
-                  {config.absenceTitle}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm whitespace-pre-line">
-                {config.absence}
-              </CardContent>
-            </Card>
-          )}
+     {/* MAIN: Stående layout */}
+<main className="flex-1 flex flex-col gap-4 px-6 py-4 overflow-hidden">
+  {/* 1️⃣ Bildekarusell øverst */}
+  <Card className="h-[40vh] w-full overflow-hidden">
+    <CardContent className="p-0 h-full">
+      {imageUrls.length ? (
+        <motion.img
+          key={imageUrls[currentImageIndex]}
+          src={imageUrls[currentImageIndex]}
+          alt=""
+          className="w-full h-full object-cover"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6 }}
+        />
+      ) : (
+        <div className="h-full flex items-center justify-center text-slate-400">
+          Ingen bilder – legg til i innstillinger.
         </div>
-      </main>
+      )}
+    </CardContent>
+  </Card>
+
+  {/* 2️⃣ Vær + Quiz/Gåte/Vits */}
+  <div className="flex gap-4">
+    {config.weatherEnabled && (
+      <Card className="flex-1">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Cloud className="w-4 h-4" /> Vær
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm">
+          {weatherData ? `${weatherData.temp}°C, ${weatherData.symbol}` : "Laster vær…"}
+        </CardContent>
+      </Card>
+    )}
+
+    <Card className="flex-1">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          {config.quizTitle}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="text-sm whitespace-pre-line">
+        {config.quizContent}
+      </CardContent>
+    </Card>
+  </div>
+
+  {/* 3️⃣ Kunngjøringer */}
+  <Card className="w-full">
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2 text-base">
+        <Newspaper className="w-4 h-4" /> {config.announcementTitle}
+      </CardTitle>
+    </CardHeader>
+    <CardContent className="text-sm whitespace-pre-line">
+      {config.announcements}
+    </CardContent>
+  </Card>
+</main>
+
+{/* 4️⃣ NRK-TICKER nederst */}
+{config.newsEnabled && tickerText && (
+  <div className="h-10 bg-blue-600 text-white flex items-center overflow-hidden px-4">
+    <Newspaper className="w-4 h-4 mr-2 flex-shrink-0" />
+    <div className="relative w-full overflow-hidden">
+      <motion.div
+        className="whitespace-nowrap"
+        animate={{ x: ["100%", "-100%"] }}
+        transition={{ repeat: Infinity, duration: 110, ease: "linear" }}
+      >
+        {tickerText}
+      </motion.div>
+    </div>
+  </div>
+)}
 
       {/* NRK-TICKER */}
       {config.newsEnabled && tickerText && (
@@ -561,6 +634,52 @@ export default function SkoleInfoskjerm() {
                 </div>
               </div>
 
+              {/* NYTT START: Vær */}
+<Separator />
+<div className="space-y-2">
+  <div className="flex items-center gap-2">
+    <Cloud className="w-4 h-4" />
+    <div className="font-medium">Vær (Furnes)</div>
+  </div>
+  <div className="flex items-center gap-2">
+    <span>Vis værkort:</span>
+    <Switch
+      checked={draft.weatherEnabled}
+      onCheckedChange={(v) => setDraft({ ...draft, weatherEnabled: v })}
+    />
+  </div>
+  <div>
+    <label className="text-sm font-medium">Sted (for API)</label>
+    <Input
+      value={draft.weatherLocation}
+      onChange={(e) => setDraft({ ...draft, weatherLocation: e.target.value })}
+    />
+  </div>
+</div>
+// NYTT SLUTT
+              {/* NYTT START: Quiz / Gåte / Vits */}
+<Separator />
+<div className="space-y-2">
+  <div className="flex items-center gap-2">
+    <div className="font-medium">Quiz / Gåte / Vits</div>
+  </div>
+  <div>
+    <label className="text-sm font-medium">Tittel</label>
+    <Input
+      value={draft.quizTitle}
+      onChange={(e) => setDraft({ ...draft, quizTitle: e.target.value })}
+    />
+  </div>
+  <div>
+    <label className="text-sm font-medium">Innhold</label>
+    <Textarea
+      rows={4}
+      value={draft.quizContent}
+      onChange={(e) => setDraft({ ...draft, quizContent: e.target.value })}
+    />
+  </div>
+</div>
+// NYTT SLUTT
               <Separator />
 
               {/* Kunngjøringer */}
