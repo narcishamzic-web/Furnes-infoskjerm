@@ -493,26 +493,6 @@ useEffect(() => {
   </div>
 )}
 
-      {/* NRK-TICKER */}
-      {config.newsEnabled && tickerText && (
-        <div className="h-10 bg-blue-600 text-white flex items-center overflow-hidden px-4">
-          <Newspaper className="w-4 h-4 mr-2 flex-shrink-0" />
-          <div className="relative w-full overflow-hidden">
-            <motion.div
-              className="whitespace-nowrap"
-              animate={{ x: ["100%", "-100%"] }}
-              transition={{
-                repeat: Infinity,
-                duration: 110, // tempo på nyhetene
-                ease: "linear",
-              }}
-            >
-              {tickerText}
-            </motion.div>
-          </div>
-        </div>
-      )}
-
       {/* INNSTILLINGER-MODAL (kun admin) */}
       {isAdmin && settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
