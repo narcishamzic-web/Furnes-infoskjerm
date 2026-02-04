@@ -39,7 +39,7 @@ import {
 const LOCAL_KEY_PREFIX = "infoskjerm_config_v1";
 
 const NRK_RSS_URL =
-  "https://api.allorigins.win/raw?url=https://www.nrk.no/nyheter/siste.rss";
+ "https://corsproxy.io/?https://www.nrk.no/nyheter/siste.rss";
 
 function getInitialRole() {
   if (typeof window === "undefined") return "elev";
@@ -100,7 +100,20 @@ async function loadFromCloud(role) {
   }
   return snap.data();
 }
+// -------- Hent NRK-nyheter --------
+async function fetchNRKNewsTitles() {
+  const res = await fetch(NRK_RSS_URL, { cache: "no-store" });
+  if (!res.ok) throw new Error("HTTP " + res.status);
 
+  const xml = await res.text();
+  const xmlDoc = new DOMParser().parseFromString(xml, "text/xml");
+
+  const titles = Array.from(xmlDoc.querySelectorAll("item > title"))
+    .map((t) => t.textContent?.trim())
+    .filter(Boolean);
+
+  return titles.slice(0, 20);
+}
 async function fetchNRKNewsTitles() {
   const res = await fetch(NRK_RSS_URL, { cache: "no-store" });
   if (!res.ok) {
@@ -237,38 +250,36 @@ const [weatherData, setWeatherData] = useState(null);
     }, config.carouselIntervalMs || 7000);
     return () => clearInterval(t);
   }, [imageUrls.length, config.carouselIntervalMs]);
+// -------- NRK ticker --------
+useEffect(() => {
+  let alive = true;
 
-  // -------- Hent NRK-nyheter --------
-  useEffect(() => {
-    let alive = true;
+  async function loadNews() {
+    try {
+      const titles = await fetchNRKNewsTitles();
+      if (!alive) return;
 
-    async function loadNews() {
-      try {
-        if (!config.newsEnabled) {
-          setTickerText("");
-          return;
-        }
-        const titles = await fetchNRKNewsTitles();
-        if (!alive) return;
-
-        if (!titles.length) {
-          setTickerText("NRK: Ingen nyheter funnet");
-        } else {
-          setTickerText("NRK: " + titles.join(" • "));
-        }
-      } catch (e) {
-        if (!alive) return;
-        setTickerText("NRK: Feil ved henting av nyheter");
+      if (titles.length) {
+        setTickerText("NRK: " + titles.join(" • "));
+      } else {
+        setTickerText("NRK: Ingen nyheter funnet");
       }
+    } catch (e) {
+      console.error("NRK-feil:", e);
+      if (!alive) return;
+      setTickerText("NRK: Nyheter midlertidig utilgjengelig");
     }
+  }
 
-    loadNews();
-    const t = setInterval(loadNews, 10 * 60 * 1000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, [config.newsEnabled]);
+  loadNews();
+  const t = setInterval(loadNews, 10 * 60 * 1000);
+
+  return () => {
+    alive = false;
+    clearInterval(t);
+  };
+}, []);
+  
 // NYTT START: Hent værdata hver 15. min
 useEffect(() => {
   let alive = true;
