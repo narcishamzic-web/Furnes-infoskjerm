@@ -39,7 +39,7 @@ import {
 const LOCAL_KEY_PREFIX = "infoskjerm_config_v1";
 
 const NRK_RSS_URL =
- "https://corsproxy.io/?https://www.nrk.no/nyheter/siste.rss";
+ "https://api.allorigins.win/raw?url=https://www.nrk.no/toppsaker.rss";
 
 function getInitialRole() {
   if (typeof window === "undefined") return "elev";
