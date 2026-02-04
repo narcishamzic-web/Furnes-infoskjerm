@@ -357,7 +357,7 @@ useEffect(() => {
       {/* HEADER */}
       <header className="px-6 py-4 flex items-center justify-between bg-sky-50/60 backdrop-blur border-b border-sky-100">
         <div>
-          <div className="text-xl font-semibold">
+          <div className="text-2xl font-semibold">
             {config.schoolName}
           </div>
           <div className="flex items-center text-sm text-slate-600 gap-1">
