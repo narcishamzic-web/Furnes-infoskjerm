@@ -114,19 +114,7 @@ async function fetchNRKNewsTitles() {
 
   return titles.slice(0, 20);
 }
-async function fetchNRKNewsTitles() {
-  const res = await fetch(NRK_RSS_URL, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error("HTTP " + res.status);
-  }
-  const xml = await res.text();
-  const xmlDoc = new DOMParser().parseFromString(xml, "text/xml");
 
-  return Array.from(xmlDoc.querySelectorAll("item > title"))
-    .map((t) => (t.textContent || "").trim())
-    .filter(Boolean)
-    .slice(0, 30);
-}
 // NYTT START: Hent værdata fra Yr/Met
 async function fetchWeather(location) {
   try {
