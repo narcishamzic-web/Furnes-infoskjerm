@@ -457,7 +457,7 @@ useEffect(() => {
           {config.quizTitle}
         </CardTitle>
       </CardHeader>
-      <CardContent className="text-sm whitespace-pre-line">
+      <CardContent className="text-xl whitespace-pre-line">
         {config.quizContent}
       </CardContent>
     </Card>
@@ -466,7 +466,7 @@ useEffect(() => {
   {/* 3️⃣ Kunngjøringer */}
   <Card className="w-full">
     <CardHeader>
-      <CardTitle className="flex items-center gap-2 text-base">
+      <CardTitle className="flex items-center gap-2 text-xl">
         <Newspaper className="w-4 h-4" /> {config.announcementTitle}
       </CardTitle>
     </CardHeader>
