@@ -357,7 +357,7 @@ useEffect(() => {
       {/* HEADER */}
       <header className="px-6 py-4 flex items-center justify-between bg-sky-50/60 backdrop-blur border-b border-sky-100">
         <div>
-          <div className="text-3xl font-semibold">
+          <div className="text-xl font-semibold">
             {config.schoolName}
           </div>
           <div className="flex items-center text-sm text-slate-600 gap-1">
@@ -372,7 +372,7 @@ useEffect(() => {
         </div>
 
         <div className="text-center">
-          <div className="text-5xl font-bold tabular-nums">
+          <div className="text-xl font-bold tabular-nums">
             {timeString}
           </div>
           <div className="text-xs uppercase tracking-wide text-slate-500">
@@ -441,11 +441,11 @@ useEffect(() => {
     {config.weatherEnabled && (
       <Card className="flex-1">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-4xl">
+          <CardTitle className="flex items-center gap-2 text-xl">
             <Cloud className="w-4 h-4" /> Vær
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-3xl">
+        <CardContent className="text-xl">
           {weatherData ? `${weatherData.temp}°C, ${weatherData.symbol}` : "Laster vær…"}
         </CardContent>
       </Card>
@@ -470,7 +470,7 @@ useEffect(() => {
         <Newspaper className="w-4 h-4" /> {config.announcementTitle}
       </CardTitle>
     </CardHeader>
-    <CardContent className="text-4xl whitespace-pre-line">
+    <CardContent className="text-2xl whitespace-pre-line">
       {config.announcements}
     </CardContent>
   </Card>
